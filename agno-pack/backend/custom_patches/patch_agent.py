@@ -1,39 +1,37 @@
 import logging
-from agno.agent import Agent
-from custom_tools.mock_yfinance import MockYFinanceTools
+from typing import Dict, Any
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Patch Agent.__init__ to log initialization
-original_init = Agent.__init__
+class Agent:
+    def __init__(self, model, tools=None, instructions: str = "", system_message: str = "", **kwargs):
+        self.model = model
+        self.tools = tools or []
+        self.instructions = instructions
+        self.system_message = system_message
+        self.kwargs = kwargs
 
-def patched_init(self, *args, **kwargs):
-    logger.info(f"Agent.__init__ called with args: {args}, kwargs: {kwargs}")
-    original_init(self, *args, **kwargs)
-    logger.info(f"Agent initialized with model: {self.model.__class__.__name__}, tools: {[tool.__class__.__name__ if hasattr(tool, '__class__') else str(tool) for tool in (self.tools or [])]}")
-
-Agent.__init__ = patched_init
-
-# Patch Agent.run to log execution and Ollama.invoke
-original_run = Agent.run
-
-def patched_run(self, *args, **kwargs):
-    logger.info(f"Agent.run called with args: {args}, kwargs: {kwargs}")
-    try:
-        # Log tool functions
-        if hasattr(self.model, 'get_functions'):
-            functions = self.model.get_functions()
-            logger.info(f"Available functions: {list(functions.keys())}")
-        if hasattr(self, 'tools'):
-            logger.info(f"Tools: {[tool.__class__.__name__ if hasattr(tool, '__class__') else str(tool) for tool in (self.tools or [])]}")
-        # Log before invoking model
-        logger.info(f"Invoking model: {self.model.__class__.__name__} with id: {getattr(self.model, 'id', 'unknown')}")
-        result = original_run(self, *args, **kwargs)
-        logger.info(f"Agent.run result: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Agent.run error: {str(e)}")
-        raise
-
-Agent.run = patched_run
+    def run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            logging.info(f"Invoking model: {self.model.__class__.__name__} with id: {self.model.id}")
+            # Ensure the model is set to tinyllama
+            if self.model.id != "tinyllama":
+                logging.warning(f"Expected model 'tinyllama', but got '{self.model.id}'. Switching to tinyllama.")
+                self.model.id = "tinyllama"
+            
+            # Invoke the model
+            messages = [{"role": "system", "content": self.system_message}]
+            messages.extend([{"role": "user", "content": inputs.get("message", "")}])
+            result = self.model.invoke(messages)
+            
+            # Check if result is None
+            if result is None:
+                logging.error("Model invocation returned None. Check Ollama service logs for errors.")
+                return {"error": "Model invocation failed, returned None."}
+            
+            # Process the result
+            output = result.get("message", {}).get("content", "")
+            return {"result": output}
+        except Exception as e:
+            logging.error(f"Agent.run error: {str(e)}")
+            return {"error": str(e)}
