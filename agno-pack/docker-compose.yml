@@ -1,0 +1,73 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+    networks:
+      - agno-network
+    depends_on:
+      - mysql
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "6G"
+    networks:
+      - agno-network
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama serve & sleep 5 && ollama pull tinyllama && wait"]
+
+  wordpress:
+    image: wordpress:6.6-apache
+    ports:
+      - "80:80"
+    environment:
+      - WORDPRESS_DB_HOST=mysql:3306
+      - WORDPRESS_DB_USER=wp_user
+      - WORDPRESS_DB_PASSWORD=your_secure_password
+      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_TABLE_PREFIX=wp_
+    volumes:
+      - ./wordpress-plugin/agno-ai:/var/www/html/wp-content/plugins/agno-ai
+      - wordpress_data:/var/www/html
+    networks:
+      - agno-network
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=wordpress
+      - MYSQL_USER=wp_user
+      - MYSQL_PASSWORD=your_secure_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - agno-network
+
+networks:
+  agno-network:
+    driver: bridge
+
+volumes:
+  wordpress_data:
+  mysql_data:
+  ollama_data:
