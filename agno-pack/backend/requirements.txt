@@ -7,5 +7,5 @@ git+https://github.com/agno-agi/agno.git@v1.4.4#subdirectory=libs/agno
 mcp==1.7.1
 openai==1.77.0
 yfinance==0.2.46
-ollama==0.6.8
+ollama==0.3.3
 pydantic==2.9.2
